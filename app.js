@@ -342,7 +342,7 @@ async function loadProps() {
   if (error) { if (tab === 'ingresos' && !loadedOnce) $('ingList').innerHTML = '<div class="empty"><b>No se pudieron cargar</b>Revisá internet y volvé a entrar.</div>'; return; }
   loadedOnce = true; props = data || [];
   const cur = props.filter(p => !isDone(p)).length; $('ingBd').hidden = !cur; $('ingBd').textContent = cur;
-  if (owner) await signAll();
+  await signAll();
   if (tab === 'ingresos') renderIng(); syncHero();
 }
 async function signAll() {
@@ -355,7 +355,7 @@ async function signAll() {
   }
   for (let i = 0; i < paths.length; i += 100) {
     const { data } = await sb.storage.from(BUCKET).createSignedUrls(paths.slice(i, i + 100), 60 * 60 * 6);
-    for (const r of data || []) if (r.signedUrl && /^https:\/\//.test(r.signedUrl)) signed[r.path] = r.signedUrl;
+    for (const r of data || []) if (r && r.signedUrl && /^https:\/\//.test(r.signedUrl)) signed[r.path] = r.signedUrl;
   }
 }
 
@@ -372,12 +372,20 @@ function renderIng() {
     const kind = kindOf(p), steps = STEPS[kind], n = steps.length, st = stepOf(p), done = isDone(p);
     const photos = (Array.isArray(p.photos) ? p.photos : []).filter(okPath), docs = p.docs && typeof p.docs === 'object' ? p.docs : {};
     const nd = Object.keys(docs).length, pid = esc(p.id);
-    const cov = owner && photos[0] && signed[photos[0]] ? '<button class="cover" data-act="lb" data-id="' + pid + '" data-i="0" style="padding:0;border:0;overflow:hidden"><img alt="Portada" src="' + esc(signed[photos[0]]) + '" style="width:100%;height:100%;object-fit:cover;display:block"></button>' : '<div class="cover">' + I.home + '</div>';
+    const cov = photos[0] && signed[photos[0]] ? '<button class="cover" data-act="lb" data-id="' + pid + '" data-i="0" style="padding:0;border:0;overflow:hidden"><img alt="Portada" src="' + esc(signed[photos[0]]) + '" style="width:100%;height:100%;object-fit:cover;display:block"></button>' : '<div class="cover">' + I.home + '</div>';
     let h = '<article class="ing" style="animation-delay:' + Math.min(i * .05, .4) + 's"><div class="hd">' + cov + '<div style="flex:1"><h3>' + esc(p.dir) + '</h3><div class="meta">' + esc(p.op) + ' · ' + photos.length + ' fotos · ' + nd + '/6 papeles' + (p.audio ? ' · audio' : '') + '</div><span class="badge k-' + kind + '">' + (kind === 'tasar' ? 'Tasación' : 'Tokko') + ' · ' + esc(ago(p.created_at)) + '</span></div></div>';
     const edge = 100 / (2 * n);
     h += '<div class="track"><div class="dots" style="grid-template-columns:repeat(' + n + ',minmax(0,1fr))"><span style="position:absolute;left:' + edge + '%;right:' + edge + '%;top:11px;height:3px;background:var(--line);border-radius:3px"></span><div class="bar" style="left:' + edge + '%;width:' + (st / (n - 1) * (100 - 2 * edge)) + '%"></div>' + steps.map((x, j) => '<div class="dot ' + (j < st || done ? 'd' : j === st ? 'n' : '') + '"><i>' + (j < st || done ? I.check.replace(/16/g, '12') : '') + '</i>' + esc(x) + '</div>').join('') + '</div></div>';
     h += '<div class="note"><b>' + esc(STEP_LONG[kind][st]) + '</b>' + (p.fiore_note ? '\n' + esc(p.fiore_note) : '') + '</div>';
     if (!owner) {
+      const phR = photos.filter(x => signed[x]);
+      const imgR = Object.keys(docs).filter(k => docs[k] && docs[k].isImg && signed[docs[k].path]);
+      const otherR = Object.keys(docs).filter(k => docs[k] && !(docs[k].isImg && signed[docs[k].path]));
+      let tR = phR.slice(0, 8).map((x, k) => '<button data-act="lb" data-id="' + pid + '" data-i="' + k + '" aria-label="Ver foto ' + (k + 1) + '"><img loading="lazy" alt="" src="' + esc(signed[x]) + '">' + (k === 7 && phR.length > 8 ? '<span class="more">+' + (phR.length - 8) + '</span>' : '') + '</button>').join('');
+      tR += imgR.map((k, jx) => '<button data-act="lb" data-id="' + pid + '" data-i="' + (phR.length + jx) + '" aria-label="Ver ' + esc(DOCS[+k] || 'papel') + '"><img loading="lazy" alt="" src="' + esc(signed[docs[k].path]) + '"><span class="more" style="background:rgba(14,16,19,.45);font-size:10px;font-family:inherit;align-items:end;padding-bottom:5px">' + esc(DOCS[+k] || 'Papel') + '</span></button>').join('');
+      tR += otherR.map(k => signed[docs[k].path] ? '<a class="flink" style="flex:none;height:64px" target="_blank" rel="noopener" href="' + esc(signed[docs[k].path]) + '">' + I.doc + esc(DOCS[+k] || 'Papel') + '</a>' : '<span class="flink" style="flex:none;height:64px">' + I.check.replace(/16/g, '14') + esc(DOCS[+k] || 'Papel') + '</span>').join('');
+      if (tR) h += '<div class="thumbs">' + tR + '</div>';
+      if (signed[p.audio]) h += '<div style="padding:0 16px 14px"><audio controls preload="none" src="' + esc(signed[p.audio]) + '" style="width:100%"></audio></div>';
       h += '<div class="acts"><button data-act="redit" data-id="' + pid + '"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Editar</button><button class="del" data-act="rdel" data-id="' + pid + '"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>Eliminar</button></div>';
       h += '<div style="padding:0 16px 16px"><a class="btn go" style="width:100%;height:48px" target="_blank" rel="noopener" href="' + esc(askLink(p)) + '"><svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>Preguntar a Fiore en qué etapa está</a></div>';
     }
