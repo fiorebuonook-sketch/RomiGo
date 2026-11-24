@@ -56,7 +56,7 @@ let pubs = PUB.map((l, i) => ({ id: 'local' + i, orden: i, titulo: l[0], zona: l
 let owner = false, tab = 'cargar', kindF = 'todas', opF = 'Todas', props = [], deferRender = false, signed = {}, open = {};
 
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-function blank() { return { id: newId(), purpose: 'tokko', op: 'Venta', calle: '', numero: '', piso: '', depto: '', nota: '', photos: [], docs: {}, audio: null }; }
+function blank() { return { id: newId(), editing: false, editDir: '', orig: null, purpose: 'tokko', op: 'Venta', calle: '', numero: '', piso: '', depto: '', nota: '', photos: [], docs: {}, audio: null }; }
 let d = blank();
 try { const s = JSON.parse(localStorage.getItem('romigo-draft') || 'null'); if (s && typeof s === 'object' && s.id) d = Object.assign(blank(), s); } catch (e) {}
 function save() {
@@ -82,7 +82,7 @@ function syncHero() {
   const ring = $('ring'), stats = $('stats');
   if (tab === 'cargar') {
     const n = doneCount(), pct = Math.round(n / 10 * 100), f = 10 - n;
-    $('hSmall').textContent = greet(); $('hTitle').textContent = 'Nueva propiedad';
+    $('hSmall').textContent = d.editing ? 'Editando' : greet(); $('hTitle').textContent = d.editing ? (dir() || d.editDir || 'Propiedad') : 'Nueva propiedad';
     $('hSub').textContent = f === 0 ? 'Está todo, ya podés avisar' : 'Te faltan ' + f + (f === 1 ? ' cosa' : ' cosas');
     ring.hidden = false; stats.hidden = true;
     $('arc').setAttribute('stroke-dashoffset', (188.5 * (1 - n / 10)).toFixed(1)); $('ringTxt').textContent = pct + '%';
@@ -121,7 +121,11 @@ function waMsg() {
   return L.join('\n');
 }
 function waLink() { return 'https://wa.me/' + WA + '?text=' + encodeURIComponent(waMsg()); }
-function syncSend() { $('send').href = waLink(); }
+function syncSend() {
+  $('send').href = d.editing ? '#' : waLink();
+  $('sendLbl').textContent = d.editing ? 'Guardar cambios' : 'Listo, avisar a Fiore';
+  $('editBar').hidden = !d.editing; if (d.editing) $('editTxt').textContent = d.editDir || dir();
+}
 function syncAll() { syncSteps(); syncSend(); syncHero(); }
 
 function renderGrid() {
@@ -247,6 +251,7 @@ $('send').addEventListener('click', async e => {
   const n = pending();
   if (n) { toast('Esperá un segundo, se están subiendo ' + n + ' archivo' + (n > 1 ? 's' : '') + '.'); return; }
   if (!sb) { toast('No hay conexión con el servidor. Revisá internet.'); return; }
+  if (d.editing) { saveEdit(); return; }
   sending = true; const link = waLink();
   const docs = {}; for (const k in d.docs) if (d.docs[k].path) docs[k] = { path: d.docs[k].path, isImg: !!d.docs[k].isImg };
   const row = { id: d.id, dir: dir() || 'Sin dirección', calle: d.calle.trim(), numero: d.numero.trim(), piso: d.piso.trim(), depto: d.depto.trim(),
@@ -256,6 +261,7 @@ $('send').addEventListener('click', async e => {
   if (error) { toast('No se pudo guardar. Revisá internet y volvé a tocar.'); return; }
   if (/^https:\/\/script\.google\.com\//.test(DRIVE_HOOK)) { try { navigator.sendBeacon(DRIVE_HOOK, new Blob([JSON.stringify({ id: row.id })], { type: 'text/plain' })); } catch (e) {} }
   buzz();
+  $('overH').textContent = '¡Listo, Romi!'; $('overWa').hidden = true;
   $('overTxt').textContent = 'Fiore ya tiene ' + row.dir + '. Ahora se abre WhatsApp para avisarle.';
   const sumRows = [['Para', row.purpose === 'tasar' ? 'Tasar' : 'Subir a Tokko'], ['Operación', row.op], ['Fotos', String(row.photos.length)], ['Papeles', Object.keys(docs).length + ' de 6'], ['Audio', row.audio ? 'Sí' : 'No']];
   $('sum').innerHTML = sumRows.map(r => '<div><span>' + esc(r[0]) + '</span><b>' + esc(r[1]) + '</b></div>').join('');
@@ -264,6 +270,56 @@ $('send').addEventListener('click', async e => {
   setTimeout(() => { location.href = link; }, 1400);
 });
 $('again').addEventListener('click', () => { $('over').hidden = true; setTab('cargar'); });
+$('editCancel').addEventListener('click', () => { d = blank(); save(); renderCargar(); setTab('ingresos'); });
+function startEdit(p) {
+  const docs = {}; const pd = p.docs && typeof p.docs === 'object' ? p.docs : {};
+  for (const k in pd) if (pd[k] && okPath(pd[k].path)) docs[k] = { path: pd[k].path, isImg: !!pd[k].isImg, status: 'ok' };
+  d = { id: p.id, editing: true, editDir: p.dir || '', purpose: kindOf(p), op: p.op === 'Alquiler' ? 'Alquiler' : 'Venta',
+    calle: p.calle || '', numero: p.numero || '', piso: p.piso || '', depto: p.depto || '', nota: p.nota || '',
+    photos: (Array.isArray(p.photos) ? p.photos : []).filter(okPath).map(x => ({ path: x, status: 'ok' })),
+    docs, audio: okPath(p.audio) ? { path: p.audio, status: 'ok' } : null,
+    orig: { photos: (p.photos || []).length, docs: Object.keys(pd), audio: !!p.audio, step: stepOf(p) } };
+  save(); setTab('cargar'); renderCargar();
+}
+async function saveEdit() {
+  sending = true;
+  const docs = {}; for (const k in d.docs) if (d.docs[k].path) docs[k] = { path: d.docs[k].path, isImg: !!d.docs[k].isImg };
+  const row = { dir: dir() || d.editDir || 'Sin dirección', calle: d.calle.trim(), numero: d.numero.trim(), piso: d.piso.trim(), depto: d.depto.trim(),
+    op: d.op, purpose: d.purpose, nota: d.nota.trim().slice(0, 4000), photos: d.photos.filter(p => p.path).map(p => p.path), docs, audio: d.audio && d.audio.path ? d.audio.path : null, updated_at: new Date().toISOString() };
+  const { error } = await sb.from('props').update(row).eq('id', d.id);
+  sending = false;
+  if (error) { toast('No se pudieron guardar los cambios. Revisá internet.'); return; }
+  if (/^https:\/\/script\.google\.com\//.test(DRIVE_HOOK)) { try { navigator.sendBeacon(DRIVE_HOOK, new Blob([JSON.stringify({ id: d.id })], { type: 'text/plain' })); } catch (e) {} }
+  const o = d.orig || { photos: 0, docs: [], audio: false };
+  const nuevosDocs = Object.keys(docs).filter(k => o.docs.indexOf(k) < 0).map(k => DOCS[+k]);
+  const masFotos = row.photos.length - o.photos;
+  const cambios = [];
+  if (nuevosDocs.length) cambios.push('📄 Sumé: ' + nuevosDocs.join(', '));
+  if (masFotos > 0) cambios.push('📸 ' + masFotos + (masFotos === 1 ? ' foto nueva' : ' fotos nuevas'));
+  if (row.audio && !o.audio) cambios.push('🎙️ Audio nuevo');
+  const faltan = DOCS.filter((x, i) => !docs[i]);
+  const msg = 'Hola Fiore! Actualicé *' + row.dir + '* en Romi Go.\n' + (cambios.length ? '\n' + cambios.join('\n') + '\n' : '') + (faltan.length ? '\nFaltan: ' + faltan.join(', ') : '\nYa están los 6 papeles.');
+  $('overH').textContent = '¡Cambios guardados!';
+  $('overTxt').textContent = 'Fiore ya puede ver lo nuevo de ' + row.dir + '.';
+  $('sum').innerHTML = [['Fotos', String(row.photos.length)], ['Papeles', Object.keys(docs).length + ' de 6'], ['Audio', row.audio ? 'Sí' : 'No']].map(r => '<div><span>' + esc(r[0]) + '</span><b>' + esc(r[1]) + '</b></div>').join('');
+  $('overWa').href = 'https://wa.me/' + WA + '?text=' + encodeURIComponent(msg); $('overWa').hidden = false;
+  $('over').hidden = false; buzz();
+  d = blank(); save(); renderCargar(); loadProps();
+}
+function askLink(p) {
+  const kind = kindOf(p);
+  const msg = 'Hola Fiore! Te consulto por *' + (p.dir || 'una propiedad') + '* (' + (kind === 'tasar' ? 'tasación' : 'Tokko') + '). ¿En qué etapa está?\nEn Romi Go me figura: *' + STEP_LONG[kind][stepOf(p)] + '*.';
+  return 'https://wa.me/' + WA + '?text=' + encodeURIComponent(msg);
+}
+function delRomi(p) {
+  openSheet('<h2>¿Eliminar esta propiedad?</h2><p>' + esc(p.dir) + '</p><div class="note" style="margin:0">Se borra de tu lista en Romi Go. <b>No se puede deshacer.</b></div><div class="g2"><button class="btn line" data-close>Cancelar</button><button class="btn red" id="rdOk">Sí, eliminar</button></div>');
+  $('rdOk').onclick = async () => {
+    $('rdOk').disabled = true;
+    const { error } = await sb.from('props').delete().eq('id', p.id);
+    if (error) { $('rdOk').disabled = false; toast('No se pudo eliminar.'); return; }
+    props = props.filter(x => x.id !== p.id); closeSheet(); renderIng(); syncHero(); toast('Propiedad eliminada.');
+  };
+}
 $('goIng').addEventListener('click', () => { $('over').hidden = true; setTab('ingresos'); });
 
 const TABS = ['cargar', 'ingresos', 'publicadas'];
@@ -321,6 +377,10 @@ function renderIng() {
     const edge = 100 / (2 * n);
     h += '<div class="track"><div class="dots" style="grid-template-columns:repeat(' + n + ',minmax(0,1fr))"><span style="position:absolute;left:' + edge + '%;right:' + edge + '%;top:11px;height:3px;background:var(--line);border-radius:3px"></span><div class="bar" style="left:' + edge + '%;width:' + (st / (n - 1) * (100 - 2 * edge)) + '%"></div>' + steps.map((x, j) => '<div class="dot ' + (j < st || done ? 'd' : j === st ? 'n' : '') + '"><i>' + (j < st || done ? I.check.replace(/16/g, '12') : '') + '</i>' + esc(x) + '</div>').join('') + '</div></div>';
     h += '<div class="note"><b>' + esc(STEP_LONG[kind][st]) + '</b>' + (p.fiore_note ? '\n' + esc(p.fiore_note) : '') + '</div>';
+    if (!owner) {
+      h += '<div class="acts"><button data-act="redit" data-id="' + pid + '"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Editar</button><button class="del" data-act="rdel" data-id="' + pid + '"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>Eliminar</button></div>';
+      h += '<div style="padding:0 16px 16px"><a class="btn go" style="width:100%;height:48px" target="_blank" rel="noopener" href="' + esc(askLink(p)) + '"><svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>Preguntar a Fiore en qué etapa está</a></div>';
+    }
     if (owner) {
       const imgDocs = Object.keys(docs).filter(k => docs[k] && docs[k].isImg && signed[docs[k].path]);
       const pdfDocs = Object.keys(docs).filter(k => docs[k] && !docs[k].isImg && signed[docs[k].path]);
@@ -366,6 +426,8 @@ $('ingList').addEventListener('click', async e => {
   if (b.dataset.act === 'lb') openLb(p, +b.dataset.i);
   if (b.dataset.act === 'edit') editProp(p);
   if (b.dataset.act === 'del') delProp(p);
+  if (b.dataset.act === 'redit') startEdit(p);
+  if (b.dataset.act === 'rdel') delRomi(p);
 });
 
 const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();

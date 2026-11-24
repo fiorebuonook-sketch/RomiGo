@@ -122,9 +122,9 @@ textarea.in{height:auto;min-height:92px;padding:13px 14px;resize:vertical;font-w
 .sendwrap{position:fixed;left:0;right:0;bottom:calc(84px + env(safe-area-inset-bottom));z-index:9;display:flex;justify-content:center;padding:0 16px;pointer-events:none}
 .send{pointer-events:auto;position:relative;overflow:hidden;width:100%;max-width:528px;height:60px;border-radius:20px;background:var(--ink);color:#fff;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:10px;font:700 17px/1 var(--disp);box-shadow:0 12px 30px rgba(14,16,19,.28);transition:transform .15s}
 .send:active{transform:scale(.98)}
-.send .fill{position:absolute;inset:0;background:var(--go);transform-origin:left;transition:transform .8s cubic-bezier(.2,.8,.2,1);z-index:0}
+.send .fill{position:absolute;inset:0;background:#D9431A;transform-origin:left;transition:transform .8s cubic-bezier(.2,.8,.2,1);z-index:0}
 .send span,.send svg{position:relative;z-index:1}
-.send.full{color:var(--ink)}
+.send.full{color:#fff}
 .send:focus-visible{outline:3px solid var(--go);outline-offset:3px}
 
 /* NAV */
@@ -273,6 +273,10 @@ nav .hl{position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px)/3
       <button class="st" data-go="c5"><i>5</i>Contame</button>
     </div>
     <main>
+      <div class="card" id="editBar" hidden style="background:var(--ink);color:#fff;flex-direction:row;align-items:center;gap:12px;padding:14px 16px">
+        <div style="flex:1;min-width:0"><div style="font-size:12px;color:#A9AEB6;font-weight:600">Estás editando</div><div id="editTxt" style="font:700 15px/1.25 var(--disp);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div></div>
+        <button class="btn" id="editCancel" style="background:rgba(255,255,255,.12);height:40px">Cancelar</button>
+      </div>
       <section class="card rise ok" id="c1">
         <div class="ch"><div class="num">1</div><div><h2>¿Para qué es?</h2><p>Elegí qué hacemos con esta propiedad</p></div></div>
         <div class="choice" id="purpose">
@@ -351,7 +355,7 @@ nav .hl{position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px)/3
   </main>
 </div>
 
-<div class="sendwrap" id="sendbar"><a class="send" id="send" href="https://wa.me/5491144243022"><div class="fill" id="fill" style="transform:scaleX(0)"></div><span>Listo, avisar a Fiore</span><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></div>
+<div class="sendwrap" id="sendbar"><a class="send" id="send" href="https://wa.me/5491144243022"><div class="fill" id="fill" style="transform:scaleX(0)"></div><span id="sendLbl">Listo, avisar a Fiore</span><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></div>
 
 <div class="navwrap"><nav id="tabs">
   <div class="hl" id="hl"></div>
@@ -362,9 +366,10 @@ nav .hl{position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px)/3
 
 <div class="over" id="over" hidden>
   <svg class="dr" aria-hidden="true" width="110" height="110" viewBox="0 0 100 100"><circle cx="50" cy="50" r="45" fill="none" stroke="#FF5B2E" stroke-width="6" stroke-linecap="round" transform="rotate(-90 50 50)"/><path d="M31 51l13 13 26-28" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-  <h2>¡Listo, Romi!</h2>
+  <h2 id="overH">¡Listo, Romi!</h2>
   <p id="overTxt">Fiore ya tiene tu nuevo ingreso.</p>
   <div class="sum" id="sum"></div>
+  <a class="btn go" id="overWa" hidden target="_blank" rel="noopener" href="#" style="width:100%;max-width:360px;height:56px;font-size:16px;font-weight:800;border-radius:16px">Avisar a Fiore del cambio</a>
   <button class="btn go" id="goIng">Ver cómo va</button>
   <button class="btn" id="again" style="background:#fff;color:var(--ink)">Cargar otra propiedad</button>
 </div>
@@ -373,6 +378,6 @@ nav .hl{position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px)/3
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="app.js?v=20261124c"></script>
+<script src="app.js?v=20261124d"></script>
 </body>
 </html>
