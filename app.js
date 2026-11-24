@@ -6,14 +6,18 @@ const WA = '5491144243022';
 const DRIVE_HOOK = 'https://script.google.com/macros/s/AKfycbxxhavQjn82lQwQPh-Cs7Pcj33hvw-Be2lijoUbbGoo87DTeRuWhx9XtwKlqeAWwd9J/exec'; // URL de la app web de Apps Script (Romi Go → Drive)
 const DOCS = ['Escritura', 'DNI del dueño', 'Autorización', 'Plano', 'Expensas', 'ABL'];
 const STEPS = {
-  tasar: ['Recibida', 'Visita', 'Informe', 'Enviada'],
+  tasar: ['Recibida', 'Informe', 'Enviada'],
   tokko: ['Recibida', 'Revisión', 'En Tokko', 'Publicada']
 };
 const STEP_LONG = {
-  tasar: ['Recibida', 'Visita agendada', 'Armando el informe', 'Tasación enviada'],
+  tasar: ['Recibida', 'Armando el informe', 'Tasación enviada'],
   tokko: ['Recibida', 'Revisando fotos y textos', 'Cargada en Tokko', 'Publicada en portales']
 };
 const CDN = 'https://d1v2p1s05qqabi.cloudfront.net/';
+const kindOf = p => p && p.purpose === 'tasar' ? 'tasar' : 'tokko';
+const lastStep = p => STEPS[kindOf(p)].length - 1;
+const stepOf = p => Math.max(0, Math.min(lastStep(p), +p.step || 0));
+const isDone = p => stepOf(p) === lastStep(p);
 const PUB = [
 ['Depto 3 amb. reciclado','Club de Campo Hacoaj','Venta','USD 155.000','63 m²','venta-departamento-3-amb-reciclado-club-de-campo-hacoaj--4396899','15668328/conversions/1747694292'],
 ['Depto 1 dorm. full amenities','Palermo Hollywood','Venta','USD 211.640','57 m²','venta-dpto-1-habitacion-full-amenities-palermo-hollywood--4617254','23025628/conversions/1776785899'],
@@ -48,6 +52,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp
 const okPath = p => typeof p === 'string' && /^[A-Za-z0-9/_.-]{3,200}$/.test(p) && !p.includes('..');
 const buzz = () => { try { navigator.vibrate && navigator.vibrate(12); } catch (e) {} };
 const sb = window.supabase ? window.supabase.createClient(SB_URL, SB_KEY) : null;
+let pubs = PUB.map((l, i) => ({ id: 'local' + i, orden: i, titulo: l[0], zona: l[1], op: l[2], precio: l[3], m2: l[4], url: 'https://coldwellbankerseniority.com/propiedad/' + l[5], foto: CDN + l[6] + '-thumbnail.webp' }));
 let owner = false, tab = 'cargar', kindF = 'todas', opF = 'Todas', props = [], deferRender = false, signed = {}, open = {};
 
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -86,10 +91,10 @@ function syncHero() {
     ring.hidden = true; stats.hidden = false;
     $('hSmall').textContent = owner ? 'Panel de Fiore' : 'Lo que le pasaste a Fiore';
     $('hTitle').textContent = owner ? 'Ingresos de Romi' : 'Mis ingresos'; $('hSub').textContent = '';
-    $('sTot').textContent = props.length; $('sCur').textContent = props.filter(p => (+p.step || 0) < 3).length; $('sOk').textContent = props.filter(p => +p.step === 3).length;
+    $('sTot').textContent = props.length; $('sCur').textContent = props.filter(p => !isDone(p)).length; $('sOk').textContent = props.filter(isDone).length;
   } else {
     ring.hidden = true; stats.hidden = true;
-    $('hSmall').textContent = 'Tu vidriera'; $('hTitle').textContent = 'Publicadas'; $('hSub').textContent = PUB.length + ' propiedades en tu página';
+    $('hSmall').textContent = 'Tu vidriera'; $('hTitle').textContent = 'Publicadas'; $('hSub').textContent = pubs.length + ' propiedades en tu página';
   }
 }
 function syncSteps() {
@@ -280,7 +285,7 @@ async function loadProps() {
   loading = false;
   if (error) { if (tab === 'ingresos' && !loadedOnce) $('ingList').innerHTML = '<div class="empty"><b>No se pudieron cargar</b>Revisá internet y volvé a entrar.</div>'; return; }
   loadedOnce = true; props = data || [];
-  const cur = props.filter(p => (+p.step || 0) < 3).length; $('ingBd').hidden = !cur; $('ingBd').textContent = cur;
+  const cur = props.filter(p => !isDone(p)).length; $('ingBd').hidden = !cur; $('ingBd').textContent = cur;
   if (owner) await signAll();
   if (tab === 'ingresos') renderIng(); syncHero();
 }
@@ -305,31 +310,37 @@ function renderIng() {
   syncHero();
   if (!sb) { $('ingList').innerHTML = '<div class="empty"><b>Sin conexión</b>No hay conexión con el servidor.</div>'; return; }
   if (!loadedOnce) { $('ingList').innerHTML = '<div class="skel"></div><div class="skel"></div>'; return; }
-  const list = props.filter(p => kindF === 'todas' || (kindF === 'listas' ? +p.step === 3 : p.purpose === kindF));
+  const list = props.filter(p => kindF === 'todas' || (kindF === 'listas' ? isDone(p) : kindOf(p) === kindF));
   if (!list.length) { $('ingList').innerHTML = '<div class="empty"><b>' + (props.length ? 'Nada por acá' : 'Todavía no hay ingresos') + '</b>' + (props.length ? 'No hay ingresos con este filtro.' : 'Tocá Cargar para subir la primera propiedad.') + '</div>'; return; }
   $('ingList').innerHTML = list.map((p, i) => {
-    const kind = p.purpose === 'tasar' ? 'tasar' : 'tokko', steps = STEPS[kind], st = Math.max(0, Math.min(3, +p.step || 0));
+    const kind = kindOf(p), steps = STEPS[kind], n = steps.length, st = stepOf(p), done = isDone(p);
     const photos = (Array.isArray(p.photos) ? p.photos : []).filter(okPath), docs = p.docs && typeof p.docs === 'object' ? p.docs : {};
     const nd = Object.keys(docs).length, pid = esc(p.id);
-    const cov = owner && photos[0] && signed[photos[0]] ? '<img class="cover" alt="" src="' + esc(signed[photos[0]]) + '">' : '<div class="cover">' + I.home + '</div>';
+    const cov = owner && photos[0] && signed[photos[0]] ? '<button class="cover" data-act="lb" data-id="' + pid + '" data-i="0" style="padding:0;border:0;overflow:hidden"><img alt="Portada" src="' + esc(signed[photos[0]]) + '" style="width:100%;height:100%;object-fit:cover;display:block"></button>' : '<div class="cover">' + I.home + '</div>';
     let h = '<article class="ing" style="animation-delay:' + Math.min(i * .05, .4) + 's"><div class="hd">' + cov + '<div style="flex:1"><h3>' + esc(p.dir) + '</h3><div class="meta">' + esc(p.op) + ' · ' + photos.length + ' fotos · ' + nd + '/6 papeles' + (p.audio ? ' · audio' : '') + '</div><span class="badge k-' + kind + '">' + (kind === 'tasar' ? 'Tasación' : 'Tokko') + ' · ' + esc(ago(p.created_at)) + '</span></div></div>';
-    h += '<div class="track"><div class="dots"><div class="bar" style="width:' + (st / 3 * 75) + '%"></div>' + steps.map((x, j) => '<div class="dot ' + (j < st || st === 3 ? 'd' : j === st ? 'n' : '') + '"><i>' + (j < st || st === 3 ? I.check.replace(/16/g, '12') : '') + '</i>' + esc(x) + '</div>').join('') + '</div></div>';
+    const edge = 100 / (2 * n);
+    h += '<div class="track"><div class="dots" style="grid-template-columns:repeat(' + n + ',minmax(0,1fr))"><span style="position:absolute;left:' + edge + '%;right:' + edge + '%;top:11px;height:3px;background:var(--line);border-radius:3px"></span><div class="bar" style="left:' + edge + '%;width:' + (st / (n - 1) * (100 - 2 * edge)) + '%"></div>' + steps.map((x, j) => '<div class="dot ' + (j < st || done ? 'd' : j === st ? 'n' : '') + '"><i>' + (j < st || done ? I.check.replace(/16/g, '12') : '') + '</i>' + esc(x) + '</div>').join('') + '</div></div>';
     h += '<div class="note"><b>' + esc(STEP_LONG[kind][st]) + '</b>' + (p.fiore_note ? '\n' + esc(p.fiore_note) : '') + '</div>';
     if (owner) {
+      const imgDocs = Object.keys(docs).filter(k => docs[k] && docs[k].isImg && signed[docs[k].path]);
+      const pdfDocs = Object.keys(docs).filter(k => docs[k] && !docs[k].isImg && signed[docs[k].path]);
+      const ph = photos.filter(x => signed[x]);
+      const shown = ph.slice(0, 6);
+      let t = shown.map((x, k) => '<button data-act="lb" data-id="' + pid + '" data-i="' + k + '" aria-label="Ver foto ' + (k + 1) + '"><img loading="lazy" alt="" src="' + esc(signed[x]) + '">' + (k === 5 && ph.length > 6 ? '<span class="more">+' + (ph.length - 6) + '</span>' : '') + '</button>').join('');
+      t += imgDocs.map((k, j) => '<button data-act="lb" data-id="' + pid + '" data-i="' + (ph.length + j) + '" aria-label="Ver ' + esc(DOCS[+k] || 'papel') + '"><img loading="lazy" alt="" src="' + esc(signed[docs[k].path]) + '"><span class="more" style="background:rgba(14,16,19,.45);font-size:10px;font-family:inherit;align-items:end;padding-bottom:5px">' + esc(DOCS[+k] || 'Papel') + '</span></button>').join('');
+      t += pdfDocs.map(k => '<a class="flink" style="flex:none;height:64px" target="_blank" rel="noopener" href="' + esc(signed[docs[k].path]) + '">' + I.doc + esc(DOCS[+k] || 'Papel') + '</a>').join('');
+      if (t) h += '<div class="thumbs">' + t + '</div>';
+      h += '<div class="acts"><button data-act="edit" data-id="' + pid + '"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Editar</button><button class="del" data-act="del" data-id="' + pid + '"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>Eliminar</button></div>';
       const isOpen = !!open[p.id];
-      h += '<button class="tg" data-act="tg" data-id="' + pid + '">' + (isOpen ? 'Ocultar' : 'Ver fotos, papeles y audio') + ' <span style="display:inline-flex;transform:rotate(' + (isOpen ? 180 : 0) + 'deg);transition:transform .3s">' + I.chev + '</span></button>';
+      h += '<button class="tg" data-act="tg" data-id="' + pid + '">' + (isOpen ? 'Ocultar' : 'Mover de paso, nota, audio y descarga') + ' <span style="display:inline-flex;transform:rotate(' + (isOpen ? 180 : 0) + 'deg);transition:transform .3s">' + I.chev + '</span></button>';
       if (isOpen) {
         h += '<div class="more">';
-        h += '<div style="font-size:12.5px;font-weight:700;color:var(--mut)">Mover a</div><div class="row">' + STEP_LONG[kind].map((x, j) => '<button class="mini' + (j === st ? ' on' : '') + '" data-act="step" data-id="' + pid + '" data-v="' + j + '">' + esc(x) + '</button>').join('') + '</div>';
         if (typeof p.drive_url === 'string' && /^https:\/\/drive\.google\.com\//.test(p.drive_url)) h += '<a class="btn line" target="_blank" rel="noopener" href="' + esc(p.drive_url) + '">Abrir carpeta en Drive</a>';
         else h += '<div style="font-size:12.5px;color:var(--mut)">Se está copiando a tu Drive (tarda hasta 10 min).</div>';
+        h += '<div style="font-size:12.5px;font-weight:700;color:var(--mut)">Mover a</div><div class="row">' + STEP_LONG[kind].map((x, j) => '<button class="mini' + (j === st ? ' on' : '') + '" data-act="step" data-id="' + pid + '" data-v="' + j + '">' + esc(x) + '</button>').join('') + '</div>';
         if (p.nota) h += '<div class="note" style="margin:0"><b>Nota de Romi</b>\n' + esc(p.nota) + '</div>';
-        const ph = photos.filter(x => signed[x]);
-        if (ph.length) h += '<div class="files">' + ph.map((x, k) => '<a href="' + esc(signed[x]) + '" target="_blank" rel="noopener" aria-label="Abrir foto ' + (k + 1) + '"><img loading="lazy" alt="Foto ' + (k + 1) + '" src="' + esc(signed[x]) + '"></a>').join('') + '</div>';
-        const dl = Object.keys(docs).filter(k => docs[k] && signed[docs[k].path]).map(k => '<a class="flink" target="_blank" rel="noopener" href="' + esc(signed[docs[k].path]) + '">' + I.doc + esc(DOCS[+k] || 'Papel') + '</a>').join('');
-        if (dl) h += '<div class="g2">' + dl + '</div>';
         if (signed[p.audio]) h += '<audio controls preload="none" src="' + esc(signed[p.audio]) + '" style="width:100%"></audio>';
-        h += '<label class="f">Nota para Romi<textarea class="in" data-note="' + pid + '" style="min-height:70px" placeholder="Ej: Visita el jueves 11 h">' + esc(p.fiore_note || '') + '</textarea></label>';
+        h += '<label class="f">Nota para Romi<textarea class="in" data-note="' + pid + '" style="min-height:70px" placeholder="Ej: Informe listo el viernes">' + esc(p.fiore_note || '') + '</textarea></label>';
         h += '<div class="g2"><button class="btn line" data-act="note" data-id="' + pid + '">Guardar nota</button><button class="btn go" data-act="zip" data-id="' + pid + '">' + I.down + 'Descargar todo</button></div>';
         h += '</div>';
       }
@@ -352,6 +363,9 @@ $('ingList').addEventListener('click', async e => {
     if (error) toast('No se pudo guardar la nota.'); else { p.fiore_note = v; toast('Nota guardada.'); renderIng(); }
   }
   if (b.dataset.act === 'zip') zipAll(p, b);
+  if (b.dataset.act === 'lb') openLb(p, +b.dataset.i);
+  if (b.dataset.act === 'edit') editProp(p);
+  if (b.dataset.act === 'del') delProp(p);
 });
 
 const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
@@ -389,12 +403,127 @@ async function zipAll(p, btn) {
   btn.disabled = false; btn.innerHTML = old;
 }
 
+const okUrl = u => typeof u === 'string' && /^https:\/\/[^\s"'<>]+$/.test(u);
 function renderPub() {
-  const list = PUB.filter(l => opF === 'Todas' || l[2] === opF);
-  $('pubList').innerHTML = list.map((l, i) => '<a class="pc" style="animation-delay:' + Math.min(i * .04, .5) + 's" href="https://coldwellbankerseniority.com/propiedad/' + esc(l[5]) + '" target="_blank" rel="noopener"><div class="im"><img loading="lazy" alt="' + esc(l[0]) + '" src="' + CDN + esc(l[6]) + '-thumbnail.webp" onerror="this.remove()"><span class="op' + (l[2] === 'Alquiler' ? ' al' : '') + '">' + esc(l[2]) + '</span><span class="pr">' + esc(l[3]) + '</span></div><div class="bd"><h3>' + esc(l[0]) + '</h3><div class="z">' + I.pin + esc(l[1]) + ' · ' + esc(l[4]) + '</div></div></a>').join('');
-  const cnt = { Todas: PUB.length, Venta: PUB.filter(l => l[2] === 'Venta').length, Alquiler: PUB.filter(l => l[2] === 'Alquiler').length };
+  $('pubAdd').hidden = !owner;
+  const list = pubs.filter(l => opF === 'Todas' || l.op === opF);
+  $('pubList').innerHTML = list.length ? list.map((l, i) => {
+    const href = okUrl(l.url) ? esc(l.url) : 'https://coldwellbankerseniority.com/a/romina-schiber';
+    const img = okUrl(l.foto) ? '<img loading="lazy" alt="' + esc(l.titulo) + '" src="' + esc(l.foto) + '" onerror="this.remove()">' : '';
+    const card = '<a class="pc" href="' + href + '" target="_blank" rel="noopener"><div class="im">' + img + '<span class="op' + (l.op === 'Alquiler' ? ' al' : '') + '">' + esc(l.op) + '</span>' + (l.precio ? '<span class="pr">' + esc(l.precio) + '</span>' : '') + '</div><div class="bd"><h3>' + esc(l.titulo) + '</h3><div class="z">' + I.pin + esc(l.zona) + (l.m2 ? ' · ' + esc(l.m2) : '') + '</div></div></a>';
+    const acts = owner ? '<div class="acts"><button data-pact="edit" data-id="' + esc(l.id) + '">Editar</button><button class="del" data-pact="del" data-id="' + esc(l.id) + '">Eliminar</button></div>' : '';
+    return '<div class="pcw" style="animation-delay:' + Math.min(i * .04, .5) + 's">' + card + acts + '</div>';
+  }).join('') : '<div class="empty"><b>No hay propiedades</b>' + (owner ? 'Tocá "Agregar" para sumar una.' : 'Todavía no hay publicadas.') + '</div>';
+  const cnt = { Todas: pubs.length, Venta: pubs.filter(l => l.op === 'Venta').length, Alquiler: pubs.filter(l => l.op === 'Alquiler').length };
   for (const c of $('opF').children) { c.classList.toggle('on', c.dataset.v === opF); c.innerHTML = esc(c.dataset.v) + '<em>' + cnt[c.dataset.v] + '</em>'; }
 }
+async function loadPubs() {
+  if (!sb) return;
+  const { data, error } = await sb.from('pubs').select('*').order('orden', { ascending: true }).order('created_at', { ascending: true });
+  if (error || !Array.isArray(data)) return;
+  pubs = data; if (tab === 'publicadas') renderPub(); syncHero();
+}
+$('pubList').addEventListener('click', e => {
+  const b = e.target.closest('[data-pact]'); if (!b) return; e.preventDefault();
+  const l = pubs.find(x => x.id === b.dataset.id); if (!l) return;
+  if (b.dataset.pact === 'edit') editPub(l); else delPub(l);
+});
+$('pubAdd').addEventListener('click', () => editPub(null));
+
+/* SHEET */
+function openSheet(html) { $('sheet').innerHTML = '<div class="grab"></div>' + html; $('sheetbg').hidden = false; const f = $('sheet').querySelector('input'); if (f) setTimeout(() => f.focus(), 250); }
+function closeSheet() { $('sheetbg').hidden = true; $('sheet').innerHTML = ''; }
+$('sheetbg').addEventListener('click', e => { if (e.target === $('sheetbg') || e.target.closest('[data-close]')) closeSheet(); });
+const fld = (id, label, val, ph, extra) => '<label class="f">' + label + '<input class="in" id="' + id + '" value="' + esc(val || '') + '" placeholder="' + esc(ph || '') + '" autocomplete="off"' + (extra || '') + '></label>';
+const seg2 = (id, a, b, v) => '<div class="segc" id="' + id + '" data-v="' + esc(v) + '"><div class="pill" style="' + (v === b ? 'transform:translateX(100%)' : '') + '"></div><button type="button" class="' + (v === a ? 'on' : '') + '" data-v="' + a + '">' + a + '</button><button type="button" class="' + (v === b ? 'on' : '') + '" data-v="' + b + '">' + b + '</button></div>';
+$('sheet').addEventListener('click', e => {
+  const b = e.target.closest('.segc button'); if (!b) return;
+  const g = b.parentElement; g.dataset.v = b.dataset.v;
+  for (const x of g.querySelectorAll('button')) x.classList.toggle('on', x === b);
+  g.querySelector('.pill').style.transform = b === g.querySelectorAll('button')[1] ? 'translateX(100%)' : '';
+});
+
+function editProp(p) {
+  openSheet('<h2>Editar ingreso</h2><p>Cambiá la dirección o para qué es.</p>' +
+    fld('eCalle', 'Calle', p.calle || p.dir, 'Ej: Av. Santa Fe') +
+    '<div class="g3">' + fld('eNum', 'Número', p.numero, '2300', ' inputmode="numeric"') + fld('ePiso', 'Piso', p.piso, '4') + fld('eDepto', 'Depto', p.depto, 'B') + '</div>' +
+    seg2('eOp', 'Venta', 'Alquiler', p.op === 'Alquiler' ? 'Alquiler' : 'Venta') +
+    seg2('ePur', 'Tasar', 'Tokko', p.purpose === 'tasar' ? 'Tasar' : 'Tokko') +
+    '<label class="f">Nota de Romi<textarea class="in" id="eNota">' + esc(p.nota || '') + '</textarea></label>' +
+    '<div class="g2"><button class="btn line" data-close>Cancelar</button><button class="btn go" id="eSave">Guardar</button></div>');
+  $('eSave').onclick = async () => {
+    const calle = $('eCalle').value.trim(), numero = $('eNum').value.trim(), piso = $('ePiso').value.trim(), depto = $('eDepto').value.trim();
+    const dirTxt = [calle, numero].filter(Boolean).join(' ') + (piso ? ', ' + piso + '°' : '') + (depto ? ' ' + depto : '');
+    const purpose = $('ePur').dataset.v === 'Tasar' ? 'tasar' : 'tokko';
+    const upd = { calle, numero, piso, depto, dir: dirTxt || 'Sin dirección', op: $('eOp').dataset.v, purpose, nota: $('eNota').value.trim().slice(0, 4000), updated_at: new Date().toISOString() };
+    if (purpose !== kindOf(p)) upd.step = 0;
+    $('eSave').disabled = true;
+    const { error } = await sb.from('props').update(upd).eq('id', p.id);
+    if (error) { $('eSave').disabled = false; toast('No se pudo guardar.'); return; }
+    Object.assign(p, upd); closeSheet(); renderIng(); toast('Ingreso actualizado.');
+  };
+}
+function delProp(p) {
+  openSheet('<h2>¿Eliminar este ingreso?</h2><p>' + esc(p.dir) + '</p><div class="note" style="margin:0">Se borran de la app la propiedad, sus fotos, papeles y audio. La carpeta que ya está en tu Drive no se toca. <b>No se puede deshacer.</b></div><div class="g2"><button class="btn line" data-close>Cancelar</button><button class="btn red" id="dOk">Sí, eliminar</button></div>');
+  $('dOk').onclick = async () => {
+    $('dOk').disabled = true; $('dOk').textContent = 'Eliminando…';
+    const paths = [].concat(Array.isArray(p.photos) ? p.photos : [], Object.values(p.docs || {}).map(x => x && x.path), p.audio || []).filter(okPath);
+    if (paths.length) await sb.storage.from(BUCKET).remove(paths);
+    const { error } = await sb.from('props').delete().eq('id', p.id);
+    if (error) { toast('No se pudo eliminar.'); $('dOk').disabled = false; $('dOk').textContent = 'Sí, eliminar'; return; }
+    props = props.filter(x => x.id !== p.id); closeSheet(); renderIng(); syncHero(); toast('Ingreso eliminado.');
+  };
+}
+function editPub(l) {
+  const n = l || { titulo: '', zona: '', op: 'Venta', precio: '', m2: '', url: '', foto: '' };
+  openSheet('<h2>' + (l ? 'Editar publicada' : 'Agregar publicada') + '</h2><p>Esto cambia solo lo que se ve en Romi Go, no la página de Coldwell Banker.</p>' +
+    fld('pTit', 'Título', n.titulo, 'Ej: Depto 2 amb. con balcón') + fld('pZona', 'Zona o dirección', n.zona, 'Ej: Belgrano') +
+    '<div class="g2">' + fld('pPre', 'Precio', n.precio, 'USD 120.000') + fld('pM2', 'Superficie', n.m2, '45 m²') + '</div>' +
+    seg2('pOp', 'Venta', 'Alquiler', n.op === 'Alquiler' ? 'Alquiler' : 'Venta') +
+    fld('pUrl', 'Link del aviso', n.url, 'https://…', ' type="url" inputmode="url"') + fld('pFoto', 'Link de la foto de portada (opcional)', n.foto, 'https://…', ' type="url" inputmode="url"') +
+    '<div class="g2"><button class="btn line" data-close>Cancelar</button><button class="btn go" id="pSave">Guardar</button></div>');
+  $('pSave').onclick = async () => {
+    const row = { titulo: $('pTit').value.trim().slice(0, 120), zona: $('pZona').value.trim().slice(0, 120), precio: $('pPre').value.trim().slice(0, 40), m2: $('pM2').value.trim().slice(0, 30), op: $('pOp').dataset.v, url: $('pUrl').value.trim(), foto: $('pFoto').value.trim() };
+    if (!row.titulo) { toast('Poné un título.'); return; }
+    if (row.url && !okUrl(row.url)) { toast('El link tiene que empezar con https://'); return; }
+    if (row.foto && !okUrl(row.foto)) { toast('El link de la foto tiene que empezar con https://'); return; }
+    $('pSave').disabled = true;
+    const q = l && !String(l.id).startsWith('local') ? sb.from('pubs').update(row).eq('id', l.id) : sb.from('pubs').insert(Object.assign({ orden: -Date.now() % 1000000000 }, row));
+    const { error } = await q;
+    if (error) { $('pSave').disabled = false; toast('No se pudo guardar.'); return; }
+    closeSheet(); await loadPubs(); toast(l ? 'Publicada actualizada.' : 'Publicada agregada.');
+  };
+}
+function delPub(l) {
+  openSheet('<h2>¿Sacar esta publicada?</h2><p>' + esc(l.titulo) + '</p><div class="note" style="margin:0">Se saca solo de Romi Go. La página de Coldwell Banker no cambia.</div><div class="g2"><button class="btn line" data-close>Cancelar</button><button class="btn red" id="pdOk">Sí, sacar</button></div>');
+  $('pdOk').onclick = async () => {
+    $('pdOk').disabled = true;
+    const { error } = await sb.from('pubs').delete().eq('id', l.id);
+    if (error) { $('pdOk').disabled = false; toast('No se pudo sacar.'); return; }
+    closeSheet(); pubs = pubs.filter(x => x.id !== l.id); renderPub(); syncHero(); toast('Listo, la sacamos de la lista.');
+  };
+}
+
+/* LIGHTBOX */
+let lbItems = [];
+function openLb(p, start) {
+  const photos = (Array.isArray(p.photos) ? p.photos : []).filter(x => okPath(x) && signed[x]).map((x, k) => ({ url: signed[x], cap: 'Foto ' + (k + 1) }));
+  const docs = p.docs || {};
+  const dimg = Object.keys(docs).filter(k => docs[k] && docs[k].isImg && signed[docs[k].path]).map(k => ({ url: signed[docs[k].path], cap: DOCS[+k] || 'Papel' }));
+  lbItems = photos.concat(dimg); if (!lbItems.length) return;
+  $('lbSc').innerHTML = lbItems.map(x => '<div class="sl"><img alt="' + esc(x.cap) + '" src="' + esc(x.url) + '"></div>').join('');
+  $('lb').hidden = false; document.body.style.overflow = 'hidden';
+  requestAnimationFrame(() => { $('lbSc').scrollLeft = $('lbSc').clientWidth * Math.min(start, lbItems.length - 1); lbSync(); });
+}
+function lbIdx() { const w = $('lbSc').clientWidth || 1; return Math.round($('lbSc').scrollLeft / w); }
+function lbSync() { const i = lbIdx(); $('lbCount').textContent = (i + 1) + ' de ' + lbItems.length; $('lbCap').textContent = (lbItems[i] || {}).cap || ''; }
+function lbGo(d) { const sc = $('lbSc'); sc.scrollTo({ left: sc.clientWidth * Math.max(0, Math.min(lbItems.length - 1, lbIdx() + d)), behavior: 'smooth' }); }
+function closeLb() { $('lb').hidden = true; document.body.style.overflow = ''; $('lbSc').innerHTML = ''; }
+$('lbSc').addEventListener('scroll', () => { clearTimeout(lbSync.t); lbSync.t = setTimeout(lbSync, 60); });
+$('lbClose').addEventListener('click', closeLb);
+$('lbPrev').addEventListener('click', () => lbGo(-1));
+$('lbNext').addEventListener('click', () => lbGo(1));
+document.addEventListener('keydown', e => { if (!$('lb').hidden) { if (e.key === 'Escape') closeLb(); if (e.key === 'ArrowLeft') lbGo(-1); if (e.key === 'ArrowRight') lbGo(1); } else if (!$('sheetbg').hidden && e.key === 'Escape') closeSheet(); });
 $('opF').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; opF = b.dataset.v; renderPub(); });
 
 $('login').addEventListener('submit', async e => {
@@ -408,12 +537,12 @@ if (sb) {
   sb.auth.onAuthStateChange((ev, session) => {
     const was = owner; owner = !!session;
     if (owner !== was) { signed = {}; loadProps(); }
-    if (tab === 'ingresos') renderIng(); syncHero();
+    if (tab === 'ingresos') renderIng(); if (tab === 'publicadas') renderPub(); syncHero();
   });
   setInterval(() => { if (tab === 'ingresos' && !document.hidden) loadProps(); }, 30000);
 }
 window.addEventListener('hashchange', () => { if (location.hash === '#fiore') setTab('ingresos'); else if (tab === 'ingresos') renderIng(); });
 renderCargar();
 if (location.hash === '#fiore') setTab('ingresos');
-loadProps();
+loadProps(); loadPubs();
 }
