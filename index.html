@@ -96,6 +96,7 @@ textarea.in{height:auto;min-height:92px;padding:13px 14px;resize:vertical;font-w
 .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .ph{position:relative;aspect-ratio:1;border-radius:14px;overflow:hidden;background:#ECEBE6;animation:pop .45s cubic-bezier(.2,.8,.2,1) both}
 .ph:first-child{grid-column:span 2;grid-row:span 2}
+#docs .ph:first-child{grid-column:auto;grid-row:auto}
 .ph img{width:100%;height:100%;object-fit:cover;display:block}
 .ph .cov{position:absolute;left:8px;bottom:8px;background:rgba(14,16,19,.75);color:#fff;font-size:11px;font-weight:700;padding:4px 8px;border-radius:8px;backdrop-filter:blur(6px)}
 .ph .ov{position:absolute;inset:0;display:grid;place-items:center;background:rgba(14,16,19,.45);color:#fff;font-size:12px;font-weight:700}
@@ -251,10 +252,7 @@ nav .hl{position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px)/3
     </div>
     <div class="ht">
       <div><small id="hSmall">Hola, Romi</small><h1 id="hTitle">Nueva propiedad</h1><p id="hSub"></p></div>
-      <div class="ring" id="ring">
-        <svg role="img" aria-label="Progreso de carga" width="74" height="74" viewBox="0 0 74 74"><circle cx="37" cy="37" r="30" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="7"/><circle id="arc" class="arc" cx="37" cy="37" r="30" fill="none" stroke="#FF5B2E" stroke-width="7" stroke-linecap="round" stroke-dasharray="188.5" stroke-dashoffset="188.5" transform="rotate(-90 37 37)"/></svg>
-        <span id="ringTxt">0%</span>
-      </div>
+      <div id="ring" hidden><span id="ringTxt"></span><svg><circle id="arc"></circle></svg></div>
     </div>
     <div class="stats" id="stats" hidden>
       <div class="stat"><b id="sTot">0</b><span>Ingresos</span></div>
@@ -265,19 +263,13 @@ nav .hl{position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px)/3
 
   <!-- CARGAR -->
   <div id="v-cargar">
-    <div class="steps" id="steps">
-      <button class="st" data-go="c1"><i>1</i>Para qué</button>
-      <button class="st" data-go="c2"><i>2</i>Dirección</button>
-      <button class="st" data-go="c3"><i>3</i>Fotos</button>
-      <button class="st" data-go="c4"><i>4</i>Papeles</button>
-      <button class="st" data-go="c5"><i>5</i>Contame</button>
-    </div>
+
     <main>
       <div class="card" id="editBar" hidden style="background:var(--ink);color:#fff;flex-direction:row;align-items:center;gap:12px;padding:14px 16px">
         <div style="flex:1;min-width:0"><div style="font-size:12px;color:#A9AEB6;font-weight:600">Estás editando</div><div id="editTxt" style="font:700 15px/1.25 var(--disp);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div></div>
         <button class="btn" id="editCancel" style="background:rgba(255,255,255,.12);height:40px">Cancelar</button>
       </div>
-      <section class="card rise ok" id="c1">
+      <section class="card rise" id="c1">
         <div class="ch"><div class="num">1</div><div><h2>¿Para qué es?</h2><p>Elegí qué hacemos con esta propiedad</p></div></div>
         <div class="choice" id="purpose">
           <button class="opt" data-v="tasar"><div class="ck"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div><div class="oi"><svg aria-hidden="true" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><b>Tasar</b><span>Saber cuánto vale</span></button>
@@ -306,8 +298,12 @@ nav .hl{position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px)/3
       </section>
 
       <section class="card rise" id="c4" style="animation-delay:.15s">
-        <div class="ch"><div class="num">4</div><div><h2>Papeles</h2><p>Foto o archivo, como te quede cómodo</p></div><span class="tag" id="docTag" hidden></span></div>
-        <div class="docs" id="docs"></div>
+        <div class="ch"><div class="num">4</div><div><h2>Adjuntar archivos</h2><p>Papeles, planos, lo que tengas. Foto o archivo.</p></div><span class="tag" id="docTag" hidden></span></div>
+        <div class="g2">
+          <label class="up dark"><input class="hide" id="inDocCam" type="file" accept="image/*" capture="environment"><div class="ui"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>Sacar foto</label>
+          <label class="up soft"><input class="hide" id="inDocFile" type="file" accept="image/*,application/pdf,.pdf,.doc,.docx" multiple><div class="ui"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.1l-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg></div>Subir archivo</label>
+        </div>
+        <div class="grid" id="docs"></div>
       </section>
 
       <section class="card rise" id="c5" style="animation-delay:.2s">
@@ -355,7 +351,7 @@ nav .hl{position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px)/3
   </main>
 </div>
 
-<div class="sendwrap" id="sendbar"><a class="send" id="send" href="https://wa.me/5491144243022"><div class="fill" id="fill" style="transform:scaleX(0)"></div><span id="sendLbl">Listo, avisar a Fiore</span><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></div>
+<div class="sendwrap" id="sendbar"><a class="send" id="send" href="https://wa.me/5491144243022"><span id="sendLbl">Listo, avisar a Fiore</span><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a></div>
 
 <div class="navwrap"><nav id="tabs">
   <div class="hl" id="hl"></div>
@@ -378,6 +374,6 @@ nav .hl{position:absolute;top:6px;bottom:6px;left:6px;width:calc((100% - 12px)/3
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="app.js?v=20261124e"></script>
+<script src="app.js?v=20261124f"></script>
 </body>
 </html>
